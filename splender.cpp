@@ -297,7 +297,6 @@ int eval_plyr(Node &n,int idx,int sd){
 	const int T = 100;
 	const int est_turn = 20;
 	const int est_decay_to = 20;
-	//const float imagine_weight = 0.5;
 	int ps = 0;
 	ps += n.plyr[idx].score * est_turn * T / 15;
 	FOR(i,0,5)
@@ -307,32 +306,6 @@ int eval_plyr(Node &n,int idx,int sd){
 	FOR(i,0,5)bns += n.plyr[idx].bonus[i] * gem_value[i] * T;
 	bns = max(bns / 3, 2*bns - (5*turn*bns/3/est_decay_to));
 	ps += bns;
-
-	/*int card_value, card_cost, mx = INT_MIN,id;
-	FOR(i,0,3){
-		FOR(j,0,4){
-			id = n.b[i][j];
-			card_value = svc[id].score * est_turn * T / 15
-				+ gem_value[svc[id].gem] * T / 3;
-			card_cost = 0;
-			FOR(k,0,5)
-				card_cost += max(0,svc[id].cost[k] - n.plyr[idx].bonus[k]) * gem_value[k] * T / 3;
-			card_cost += max(0,wild_needed(id,n.plyr[idx])-n.plyr[idx].gem[5]) * T / 2;// need how many turns to collect the remaining gems 
-			mx = max(mx,card_value - card_cost);
-		}
-	}*/
-	/*FOR(i,0,3){
-		id = n.plyr[idx].res[i];
-		if(id==-1)continue;
-		card_value = svc[id].score * est_turn * T / 15
-			+ gem_value[svc[id].gem] * T / 3;
-		card_cost = 0;
-		FOR(k,0,5)
-			card_cost += max(0,svc[id].cost[k] - n.plyr[idx].bonus[k]) * gem_value[k] * T / 3;
-		card_cost += max(0,wild_needed(id,n.plyr[idx])-n.plyr[idx].gem[5]) * T / 2;// need how many turns to collect the remaining gems 
-		mx = max(mx,card_value - card_cost);
-	}
-	ps += max((float)0,imagine_weight * mx);*/
 	return ps;
 }
 
