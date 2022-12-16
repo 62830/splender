@@ -1,4 +1,4 @@
-#define NODE_LIMIT 300000
+#define NODE_LIMIT 500000
 #define DEPTH_LIMIT 20
 #include "splender.h"
 #include<bits/stdc++.h>
@@ -51,79 +51,104 @@ ostream& operator <<(ostream&O, struct move m){
 	return O;
 }
 struct Player{
-	int id = 0;
-	int gem[7] = {0,0,0,0,0,0,0};
-	int score = 0;
-	int bonus[5] = {0,0,0,0,0};
-	int res[3] = {-1,-1,-1};
-	Player(int i){id = i;}
+	bool id = 0;
+	char gem[7] = {0,0,0,0,0,0,0};
+	char score = 0;
+	char bonus[5] = {0,0,0,0,0};
+	char res[3] = {-1,-1,-1};
+	Player(bool i){id = i;}
 };
 ostream& operator <<(ostream& O,struct Player p){
 	return O<<"id: "<<p.id<<
-		" gem[6]: "<<p.gem[0]<<p.gem[1]<<p.gem[2]<<p.gem[3]<<p.gem[4]<<p.gem[5]<<
-		" bonus[5]: "<<p.bonus[0]<<p.bonus[1]<<p.bonus[2]<<p.bonus[3]<<p.bonus[4]<<
-		" score: "<<p.score<<
-		" res: "<<p.res[0]<<' '<<p.res[1]<<' '<<p.res[2];
+		" gem[6]: "<<(int)p.gem[0]<<(int)p.gem[1]<<(int)p.gem[2]<<(int)p.gem[3]<<(int)p.gem[4]<<(int)p.gem[5]<<
+		" bonus[5]: "<<(int)p.bonus[0]<<(int)p.bonus[1]<<(int)p.bonus[2]<<(int)p.bonus[3]<<(int)p.bonus[4]<<
+		" score: "<<(int)p.score<<
+		" res: "<<(int)p.res[0]<<' '<<(int)p.res[1]<<' '<<(int)p.res[2];
 }
+struct M{
+	unsigned char c;
+	M(){}
+	M(struct move m){
+		if(m.type == 2){
+			c = 128 + m.card_id;
+		}
+		else if(m.type == 1){
+			c = 0;
+			FOR(i,0,5){
+				c <<= 1;
+				c += m.gem[i];
+			}
+			c += 90;
+		}
+		else if(m.type == 3){
+			c = m.card_id;
+		}
+		else c = 255;
+	}
+};
+struct move M2move(M m){
+	struct move re;
+	if(m.c==255){
+		re.type = -1;
+		return re;
+	}
+	else if(m.c >= 128){
+		re.type = 2;
+		re.card_id = m.c - 128;
+	}
+	else if(m.c >= 90){
+		re.type = 1;
+		bool flag = false;
+		FOR(i,1,6)
+			if(m.c == 90 + (1<<i)){
+				re.gem[5-i] = 2;
+				flag = true;
+			}
+			else re.gem[5-i] = 0;
+		if(flag)return re;
+		FOR(i,0,5)
+			if((m.c-90) & (1<<i))
+				re.gem[4-i] = 1;
+			else re.gem[4-i] = 0;
+	}
+	else{
+		re.type = 3;
+		re.card_id = m.c;
+	}
+	
+	return re;
+}
+ostream& operator<<(ostream& O,M m){
+	return O<<M2move(m);
+}
+
 struct Node{
 	int eval,alpha = INT_MIN,beta = INT_MAX;
 	bool mx = false;
-	struct move best_move;
+	M best_move;
 	Player plyr[2] = {Player(0),Player(1)};
-	vi g,vci;
-	vvi b;
+	vector<char>g,vci;
+	vector<vector<char>>b;
 	vector<int> chs;
-	vector<struct move> legal_moves;
+	vector<M> legal_moves;
 	Node(){
-		g = vi(6,4);
-		vci = vi(3,4);
-		b = vvi(3,vi(4,-1));
+		g = vector<char>(6,4);
+		vci = vector<char>(3,4);
+		b = vector<vector<char>>(3,vector<char>(4,-1));
 	}
 };
 
+namespace {
+
+int search_depth = 0;
 vector<vector<card>> vc(3);
 vector<card> svc(90);
 vector<Node> tmp_nodes(NODE_LIMIT);
 vector<float> gem_value(5,1);
 Node cur;
 int turn = 0,tni = 0;
-void init (vector<card> stack_1, vector<card> stack_2, vector<card> stack_3) {
-	vc[0] = stack_1;
-	vc[1] = stack_2;
-	vc[2] = stack_3;
-	srand(time(NULL));
-	FOR(i,0,3)
-		for(auto u:vc[i])
-			svc[u.id] = u;
-	cur = Node();
-	FOR(i,0,4)
-		FOR(j,0,3)
-			cur.b[j][i] = vc[j][i].id;
-	turn = 0;
-	tni = 0;
-
-	vi gem_cnt(5,0);
-	int gem_sum = 0;
-	FOR(i,0,8){
-		card c = vc[2][i];
-		FOR(j,0,5)gem_cnt[j] += c.cost[j];
-		++gem_cnt[c.gem];
-	}
-	FOR(i,0,14){
-		card c = vc[1][i];
-		FOR(j,0,5)gem_cnt[j] += c.cost[j];
-		++gem_cnt[c.gem];
-	}
-	FOR(i,0,18){
-		card c = vc[0][i];
-		FOR(j,0,5)gem_cnt[j] += c.cost[j];
-		++gem_cnt[c.gem];
-	}
-	FOR(i,0,5)gem_sum += gem_cnt[i];
-	FOR(i,0,5)gem_value[i] = 5.0*gem_cnt[i] / gem_sum;
-}
-
-void update(Node &n,struct move &m,bool search){
+void update(Node &n,M cm,bool search){
+	struct move m = M2move(cm);
 	Player* p = &(n.plyr[1-n.mx]);
 	if(m.type == 1){
 		FOR(i,0,5){
@@ -138,7 +163,7 @@ void update(Node &n,struct move &m,bool search){
 		int dif;
 		FOR(i,0,5){
 			wild += max(0,c.cost[i] - p->bonus[i] - p->gem[i]);
-			dif = min(p->gem[i],max(0,c.cost[i] - p->bonus[i]));
+			dif = min(p->gem[i],(char)max(0,c.cost[i] - p->bonus[i]));
 			p->gem[i] -= dif;
 			p->gem[6] -= dif;
 			n.g[i] += dif;
@@ -185,7 +210,7 @@ void update(Node &n,struct move &m,bool search){
 	
 	n.legal_moves.clear();
 	n.chs.clear();
-	n.best_move.type = -1;
+	n.best_move.c = 255;
 	n.mx = !n.mx;
 	if(!search){
 		tni = 0;
@@ -194,32 +219,32 @@ void update(Node &n,struct move &m,bool search){
 	}
 }
 
-void list_legal_moves(Player &p,vector<struct move> &v,vi &g,vvi &b){
+int wild_needed(int card_id,Player &p){
+	card c = svc[card_id];
+	int wild = 0;
+	FOR(k,0,5)
+		wild += max(0,c.cost[k] - p.bonus[k] - p.gem[k]);
+	return wild;
+}
+
+void list_legal_moves(Player &p,vector<M> &v,vector<char> &g,vector<vector<char>> &b){
 	int gemsum = p.gem[6];
 	struct move m;
 	//list buy
 	m.type = 2;
 	FOR(i,0,3){
 		FOR(j,0,4){
-			int wild = 0;
-			card c = svc[b[i][j]];
-			FOR(k,0,5)
-				wild += max(0,c.cost[k] - p.bonus[k] - p.gem[k]);
-			if(wild <= p.gem[5]){
+			if(wild_needed(b[i][j],p) <= p.gem[5]){
 				m.card_id = b[i][j];
-				v.pb(m);
+				v.pb(M(m));
 			}
 		}
 	}
 	FOR(i,0,3){
 		if(p.res[i] == -1)continue;
-		int wild = 0;
-		card c = svc[p.res[i]];
-		FOR(k,0,5)
-			wild += max(0,c.cost[k] - p.bonus[k] - p.gem[k]);
-		if(wild <= p.gem[5]){
+		if(wild_needed(p.res[i],p) <= p.gem[5]){
 			m.card_id = p.res[i];
-			v.pb(m);
+			v.pb(M(m));
 		}
 	}
 	//list take 
@@ -230,7 +255,7 @@ void list_legal_moves(Player &p,vector<struct move> &v,vi &g,vvi &b){
 			if(g[i] >= 2){
 				FOR(j,0,5)
 					m.gem[j] = take2[i][j];
-				v.pb(m);
+				v.pb(M(m));
 			}
 		}
 		if(gemsum <= 7){
@@ -243,7 +268,7 @@ void list_legal_moves(Player &p,vector<struct move> &v,vi &g,vvi &b){
 				if(flag){
 					FOR(j,0,5)
 						m.gem[j] = take3[i][j];
-					v.pb(m);
+					v.pb(M(m));
 				}
 			}
 		}
@@ -254,99 +279,107 @@ void list_legal_moves(Player &p,vector<struct move> &v,vi &g,vvi &b){
 		FOR(i,0,3){
 			FOR(j,0,4){
 				m.card_id = b[i][j];
-				v.pb(m);
+				v.pb(M(m));
 			}
 		}
 	}
 	if(!v.size()){
 		m.type = -1;
-		v.pb(m);
+		v.pb(M(m));
 	}
 }
 void list_legal_moves(Node &n){
 	list_legal_moves(n.plyr[1-n.mx],n.legal_moves,n.g,n.b);
 }
 
-int eval(Node &n){
-	if(n.plyr[0].score >= 15)return 1e9;
-	if(n.plyr[1].score >= 15)return -1e9;
+int eval_plyr(Node &n,int idx,int sd){
+	if(n.plyr[idx].score >= 15)return 1e9 + DEPTH_LIMIT + sd - search_depth;
 	const int T = 100;
-	const int est_turn = 30;
-	const int est_decay_to = 30;
+	const int est_turn = 20;
+	const int est_decay_to = 20;
+	//const float imagine_weight = 0.5;
 	int ps = 0;
-	ps += n.plyr[0].score * est_turn * T / 15;
+	ps += n.plyr[idx].score * est_turn * T / 15;
 	FOR(i,0,5)
-		ps += n.plyr[0].gem[i]*gem_value[i]*T/3;
-	ps += n.plyr[0].gem[5] * T / 2;
+		ps += n.plyr[idx].gem[i]*gem_value[i]*T/3;
+	ps += n.plyr[idx].gem[5] * T / 2;
 	int bns = 0;
-	FOR(i,0,5)bns += n.plyr[0].bonus[i] * gem_value[i] * T;
+	FOR(i,0,5)bns += n.plyr[idx].bonus[i] * gem_value[i] * T;
 	bns = max(bns / 3, 2*bns - (5*turn*bns/3/est_decay_to));
 	ps += bns;
 
-	int qs = 0;
-	qs += n.plyr[1].score * est_turn * T / 15;
-	FOR(i,0,5)
-		qs += n.plyr[1].gem[i]*gem_value[i]*T/3;
-	qs += n.plyr[1].gem[5] * T / 2;
-	bns = 0;
-	FOR(i,0,5)bns += n.plyr[1].bonus[i] * gem_value[i] * T;
-	bns = max(bns / 3, 2*bns - (5*turn*bns/3/est_decay_to));
-	qs += bns;
-	return ps - qs;
+	/*int card_value, card_cost, mx = INT_MIN,id;
+	FOR(i,0,3){
+		FOR(j,0,4){
+			id = n.b[i][j];
+			card_value = svc[id].score * est_turn * T / 15
+				+ gem_value[svc[id].gem] * T / 3;
+			card_cost = 0;
+			FOR(k,0,5)
+				card_cost += max(0,svc[id].cost[k] - n.plyr[idx].bonus[k]) * gem_value[k] * T / 3;
+			card_cost += max(0,wild_needed(id,n.plyr[idx])-n.plyr[idx].gem[5]) * T / 2;// need how many turns to collect the remaining gems 
+			mx = max(mx,card_value - card_cost);
+		}
+	}*/
+	/*FOR(i,0,3){
+		id = n.plyr[idx].res[i];
+		if(id==-1)continue;
+		card_value = svc[id].score * est_turn * T / 15
+			+ gem_value[svc[id].gem] * T / 3;
+		card_cost = 0;
+		FOR(k,0,5)
+			card_cost += max(0,svc[id].cost[k] - n.plyr[idx].bonus[k]) * gem_value[k] * T / 3;
+		card_cost += max(0,wild_needed(id,n.plyr[idx])-n.plyr[idx].gem[5]) * T / 2;// need how many turns to collect the remaining gems 
+		mx = max(mx,card_value - card_cost);
+	}
+	ps += max((float)0,imagine_weight * mx);*/
+	return ps;
 }
 
-bool move_cmp(const struct move &a,const struct move &b){
-	if(a.type == 2 && b.type == 2)
-		return a.card_id > b.card_id;
-	if(a.type == 2 || b.type == 2)
-		return a.type ==2;
-	if(a.type == 1 && b.type == 1){
-		float av = 0,bv = 0;
-		FOR(i,0,5)av += gem_value[i] * a.gem[i];
-		FOR(i,0,5)bv += gem_value[i] * b.gem[i];
-		return av > bv;
-	}
-	if(a.type == 1 || b.type == 1){
-		return a.type == 1;
-	}
-	return a.card_id > b.card_id;
+int eval(Node &n,int sd){
+	int tmp = eval_plyr(n,0,sd);
+	if(tmp >= 1e9)return tmp;
+	int tmp2 = eval_plyr(n,1,sd);
+	if(tmp2 >= 1e9)return -tmp2;
+	return tmp - tmp2;
 }
 
 vi argsort_chs(Node &n){
 	vi re(n.chs.size());
 	iota(BE(re),0);
 	if(n.mx)
-		sort(BE(re),[&n](int a,int b){return tmp_nodes[n.chs[a]].eval > tmp_nodes[n.chs[b]].eval;});
+		sort(BE(re),[&](int a,int b){return tmp_nodes[n.chs[a]].eval > tmp_nodes[n.chs[b]].eval;});
 	else
-		sort(BE(re),[&n](int a,int b){return tmp_nodes[n.chs[a]].eval < tmp_nodes[n.chs[b]].eval;});
+		sort(BE(re),[&](int a,int b){return tmp_nodes[n.chs[a]].eval < tmp_nodes[n.chs[b]].eval;});
 	return re;
 }
 
 void minimax(Node &n,int sd){
 	if(sd <= 0 || n.plyr[0].score >= 15 || n.plyr[1].score >= 15){
-		n.eval = eval(n);
+		n.eval = eval(n,sd);
 		return;
 	}
 	if(!n.legal_moves.size()){
 		list_legal_moves(n);
-		sort(BE(n.legal_moves),move_cmp);
+		sort(BE(n.legal_moves),[&](M &a,M &b){return (svc[a.c-128].score > svc[b.c-128].score) || (svc[a.c-128].score == svc[b.c-128].score && a.c > b.c);});
 	}
-	if(n.legal_moves[0].type == -1){
-		n.eval = (n.mx?-1e9-3:1e9+3);
-		if(n.mx) n.alpha = max(n.alpha,n.eval);
+	if(n.legal_moves[0].c == 255){
+		n.eval = 1e9 + DEPTH_LIMIT + sd - search_depth;
+		if(n.mx)n.eval = - n.eval;
+		if(n.mx)n.alpha = max(n.alpha,n.eval);
 		else n.beta = min(n.beta,n.eval);
 		return;
 	}
-	if(n.mx) n.eval = -1e9-5;
-	else n.eval = 1e9+5;
+	if(n.mx) n.eval = -2e9;
+	else n.eval = 2e9;
 
 	int idx;
 	vi move_order = argsort_chs(n);
 	for(auto i:move_order){
+		if(tni == NODE_LIMIT)return;
 		idx = n.chs[i];
 		tmp_nodes[idx].alpha = n.alpha;
 		tmp_nodes[idx].beta = n.beta;
-		if(tni == NODE_LIMIT)return;
 		minimax(tmp_nodes[idx],sd-1);
 		if(n.mx){
 			if(tmp_nodes[idx].eval > n.eval){
@@ -370,8 +403,8 @@ void minimax(Node &n,int sd){
 	int s = n.chs.size();
 	FOR(i,s,n.legal_moves.size()){
 		Node m = n;
-		update(m,n.legal_moves[i],true);
 		if(tni == NODE_LIMIT)return;
+		update(m,n.legal_moves[i],true);
 		tmp_nodes[tni] = m;
 		n.chs.pb(tni);
 		idx = tni;
@@ -397,12 +430,53 @@ void minimax(Node &n,int sd){
 	}
 }
 
-struct move player_move (struct move m) {
+}//namespace 
+
+void init (vector<card> stack_1, vector<card> stack_2, vector<card> stack_3) {
+	vc[0] = stack_1;
+	vc[1] = stack_2;
+	vc[2] = stack_3;
+	srand(time(NULL));
+	FOR(i,0,3)
+		for(auto u:vc[i])
+			svc[u.id] = u;
+	cur = Node();
+	FOR(i,0,4)
+		FOR(j,0,3)
+			cur.b[j][i] = vc[j][i].id;
+	turn = 0;
+	tni = 0;
+
+	vi gem_cnt(5,0);
+	int gem_sum = 0;
+	FOR(i,0,8){
+		card c = vc[2][i];
+		FOR(j,0,5)gem_cnt[j] += c.cost[j];
+		++gem_cnt[c.gem];
+	}
+	FOR(i,0,14){
+		card c = vc[1][i];
+		FOR(j,0,5)gem_cnt[j] += c.cost[j];
+		++gem_cnt[c.gem];
+	}
+	FOR(i,0,18){
+		card c = vc[0][i];
+		FOR(j,0,5)gem_cnt[j] += c.cost[j];
+		++gem_cnt[c.gem];
+	}
+	FOR(i,0,5)gem_sum += gem_cnt[i];
+	FOR(i,0,5)gem_value[i] = 5.0*gem_cnt[i] / gem_sum;
+}
+
+
+struct move player_move (struct move mv) {
+	M m(mv);
 	update(cur,m,false);
-	int search_depth = 0;
-	struct move last_best_move;
+	search_depth = 0;
+	M last_best_move;
 	int last_eval;
-	while(5*tni < NODE_LIMIT && search_depth < DEPTH_LIMIT){
+	int last_tni = 1;
+	while((search_depth&1?2:10)*tni < NODE_LIMIT && search_depth < DEPTH_LIMIT){
 		++search_depth;
 		cur.alpha = INT_MIN;
 		cur.beta = INT_MAX;
@@ -410,13 +484,16 @@ struct move player_move (struct move m) {
 		if(tni == NODE_LIMIT){
 			cur.best_move = last_best_move;
 			cur.eval = last_eval;
+			--search_depth;
 			break;
 		}
 		last_best_move = cur.best_move;
 		last_eval = cur.eval;
+		last_tni = tni;
 	}
 	++turn;
 	m = cur.best_move;
+	mv = M2move(m);
 	update(cur,m,false);
-    return m;
+    return mv;
 }
