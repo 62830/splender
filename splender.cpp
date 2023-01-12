@@ -1,4 +1,4 @@
-#define NODE_LIMIT 500000
+#define NODE_LIMIT 100000
 #define DEPTH_LIMIT 20
 #include "splender.h"
 #include<bits/stdc++.h>
@@ -440,6 +440,7 @@ void init (vector<card> stack_1, vector<card> stack_2, vector<card> stack_3) {
 	FOR(i,0,5)gem_sum += gem_cnt[i];
 	FOR(i,0,5)gem_value[i] = 5.0*gem_cnt[i] / gem_sum;
 }
+
 
 
 struct move player_move (struct move mv) {
